@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce Tour Bookings
  * Description: A powerful alternative to Bokun for managing tour and activity bookings in WooCommerce.
- * Version: 2.1.0
+ * Version: 2.1.1
  * Author: Jules
  * Text Domain: wc-tour-bookings
  */
@@ -128,56 +128,66 @@ class WC_Tour_Bookings {
     }
 
     public function enqueue_scripts() {
-        if ( is_product() ) {
-            global $post;
-            $product = wc_get_product( $post->ID );
-            if ( $product && $product->is_type( 'tour' ) ) {
-                wp_enqueue_script( 'jquery-ui-datepicker' );
-                wp_enqueue_style( 'jquery-ui-style', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
-                wp_enqueue_script( 'wc-tour-bookings-frontend', plugin_dir_url( __FILE__ ) . 'assets/js/frontend.js', array( 'jquery', 'jquery-ui-datepicker' ), '2.1.0', true );
-            }
+        if ( ! function_exists( 'is_product' ) || ! is_product() ) {
+            return;
+        }
+
+        global $post;
+        if ( ! function_exists( 'wc_get_product' ) ) {
+            return;
+        }
+
+        $product = wc_get_product( $post->ID );
+        if ( $product && $product->is_type( 'tour' ) ) {
+            wp_enqueue_script( 'jquery-ui-datepicker' );
+            wp_enqueue_style( 'jquery-ui-style', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
+            wp_enqueue_script( 'wc-tour-bookings-frontend', plugin_dir_url( __FILE__ ) . 'assets/js/frontend.js', array( 'jquery', 'jquery-ui-datepicker' ), '2.1.1', true );
         }
     }
 
     public function display_booking_selection() {
         global $product;
-        if ( $product && $product->is_type( 'tour' ) ) {
-            $slots_raw = get_post_meta( $product->get_id(), '_tour_time_slots', true );
-            $slots = ! empty( $slots_raw ) ? array_map( 'trim', explode( ',', $slots_raw ) ) : array();
-            $collect = get_post_meta( $product->get_id(), '_tour_collect_participants', true ) === 'yes';
-            ?>
-            <div class="tour-booking-selection" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                <div style="margin-bottom: 15px;">
-                    <label for="tour_booking_date" style="display: block; font-weight: bold; margin-bottom: 5px;"><?php _e( 'Select Date:', 'wc-tour-bookings' ); ?></label>
-                    <input type="text" id="tour_booking_date" name="tour_booking_date" class="tour-booking-date" readonly placeholder="<?php _e( 'Choose a date...', 'wc-tour-bookings' ); ?>" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;">
-                </div>
-
-                <?php if ( ! empty( $slots ) ) : ?>
-                    <div style="margin-bottom: 15px;">
-                        <label for="tour_booking_slot" style="display: block; font-weight: bold; margin-bottom: 5px;"><?php _e( 'Select Time Slot:', 'wc-tour-bookings' ); ?></label>
-                        <select name="tour_booking_slot" id="tour_booking_slot" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;">
-                            <option value=""><?php _e( 'Choose a time...', 'wc-tour-bookings' ); ?></option>
-                            <?php foreach ( $slots as $slot ) : ?>
-                                <option value="<?php echo esc_attr( $slot ); ?>"><?php echo esc_html( $slot ); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ( $collect ) : ?>
-                    <div style="margin-bottom: 10px;" class="participant-names">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px;"><?php _e( 'Participant Names:', 'wc-tour-bookings' ); ?></label>
-                        <div id="participant_fields_container">
-                            <input type="text" name="tour_participants[]" placeholder="<?php _e( 'Participant 1', 'wc-tour-bookings' ); ?>" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; margin-bottom: 5px;">
-                        </div>
-                    </div>
-                <?php endif; ?>
-            </div>
-            <?php
+        if ( ! $product || ! method_exists( $product, 'is_type' ) || ! $product->is_type( 'tour' ) ) {
+            return;
         }
+        $slots_raw = get_post_meta( $product->get_id(), '_tour_time_slots', true );
+        $slots = ! empty( $slots_raw ) ? array_map( 'trim', explode( ',', $slots_raw ) ) : array();
+        $collect = get_post_meta( $product->get_id(), '_tour_collect_participants', true ) === 'yes';
+        ?>
+        <div class="tour-booking-selection" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+            <div style="margin-bottom: 15px;">
+                <label for="tour_booking_date" style="display: block; font-weight: bold; margin-bottom: 5px;"><?php _e( 'Select Date:', 'wc-tour-bookings' ); ?></label>
+                <input type="text" id="tour_booking_date" name="tour_booking_date" class="tour-booking-date" readonly placeholder="<?php _e( 'Choose a date...', 'wc-tour-bookings' ); ?>" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;">
+            </div>
+
+            <?php if ( ! empty( $slots ) ) : ?>
+                <div style="margin-bottom: 15px;">
+                    <label for="tour_booking_slot" style="display: block; font-weight: bold; margin-bottom: 5px;"><?php _e( 'Select Time Slot:', 'wc-tour-bookings' ); ?></label>
+                    <select name="tour_booking_slot" id="tour_booking_slot" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;">
+                        <option value=""><?php _e( 'Choose a time...', 'wc-tour-bookings' ); ?></option>
+                        <?php foreach ( $slots as $slot ) : ?>
+                            <option value="<?php echo esc_attr( $slot ); ?>"><?php echo esc_html( $slot ); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            <?php endif; ?>
+
+            <?php if ( $collect ) : ?>
+                <div style="margin-bottom: 10px;" class="participant-names">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;"><?php _e( 'Participant Names:', 'wc-tour-bookings' ); ?></label>
+                    <div id="participant_fields_container">
+                        <input type="text" name="tour_participants[]" placeholder="<?php _e( 'Participant 1', 'wc-tour-bookings' ); ?>" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; margin-bottom: 5px;">
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+        <?php
     }
 
     public function add_cart_item_data( $cart_item_data, $product_id, $variation_id ) {
+        if ( ! function_exists( 'wc_get_product' ) ) {
+            return $cart_item_data;
+        }
         $product = wc_get_product( $product_id );
         if ( $product && $product->is_type( 'tour' ) ) {
             if ( isset( $_POST['tour_booking_date'] ) && ! empty( $_POST['tour_booking_date'] ) ) {
@@ -228,6 +238,9 @@ class WC_Tour_Bookings {
     }
 
     public function validate_add_to_cart( $passed, $product_id, $quantity ) {
+        if ( ! function_exists( 'wc_get_product' ) ) {
+            return $passed;
+        }
         $product = wc_get_product( $product_id );
         if ( $product && $product->is_type( 'tour' ) ) {
             if ( ! isset( $_POST['tour_booking_date'] ) || empty( $_POST['tour_booking_date'] ) ) {
@@ -266,6 +279,9 @@ class WC_Tour_Bookings {
     }
 
     public function validate_update_cart( $passed, $cart_item_key, $values, $quantity ) {
+        if ( ! function_exists( 'WC' ) ) {
+            return $passed;
+        }
         $cart_item = WC()->cart->get_cart_item( $cart_item_key );
         if ( isset( $cart_item['tour_booking_date'] ) ) {
             $product_id = $cart_item['product_id'];
@@ -289,6 +305,9 @@ class WC_Tour_Bookings {
 
     private function get_booked_count( $product_id, $date, $slot = '' ) {
         global $wpdb;
+        if ( ! function_exists( 'wc_get_orders' ) ) {
+            return 0;
+        }
         $valid_statuses = array( 'wc-processing', 'wc-completed', 'wc-on-hold' );
         $placeholders   = implode( ',', array_fill( 0, count( $valid_statuses ), '%s' ) );
 
@@ -298,14 +317,10 @@ class WC_Tour_Bookings {
              INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta as item_meta_product ON items.order_item_id = item_meta_product.order_item_id
              INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta as item_meta_qty ON items.order_item_id = item_meta_qty.order_item_id";
 
-        // HPOS compatibility check for status filtering
         if ( ! class_exists( 'Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController' ) || ! \Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController::is_order_tabs_enabled() ) {
             $sql .= " INNER JOIN {$wpdb->prefix}posts as posts ON items.order_id = posts.ID";
             $status_where = " AND posts.post_status IN ($placeholders)";
         } else {
-            // For HPOS, we might need a different approach if direct SQL is used,
-            // but for simplicity and correctness, we'll use a more compatible where clause if possible.
-            // However, direct SQL is tough with HPOS. Let's fallback to wc_get_orders for safety if we can't be sure.
             return $this->get_booked_count_safe($product_id, $date, $slot);
         }
 
@@ -330,7 +345,7 @@ class WC_Tour_Bookings {
         $orders = wc_get_orders( array(
             'status' => array( 'processing', 'completed', 'on-hold' ),
             'limit'  => -1,
-            'date_created' => '>' . date('Y-m-d', strtotime('-1 year')), // Optimization: only last year
+            'date_created' => '>' . date('Y-m-d', strtotime('-1 year')),
         ) );
 
         $count = 0;
@@ -350,7 +365,7 @@ class WC_Tour_Bookings {
 
     private function get_in_cart_count( $product_id, $date, $slot = '', $exclude_cart_item_key = '' ) {
         $count = 0;
-        if ( WC()->cart ) {
+        if ( function_exists( 'WC' ) && WC()->cart ) {
             foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
                 if ( $cart_item_key === $exclude_cart_item_key ) {
                     continue;
@@ -412,10 +427,14 @@ class WC_Tour_Bookings {
     }
 
     public function admin_dashboard_page() {
+        if ( ! function_exists( 'wc_get_orders' ) ) {
+            echo '<div class="wrap"><h1>' . __( 'Tour Bookings Dashboard', 'wc-tour-bookings' ) . '</h1><p>' . __( 'WooCommerce is not active.', 'wc-tour-bookings' ) . '</p></div>';
+            return;
+        }
         $today_date = wp_date('Y-m-d');
         $orders = wc_get_orders( array(
             'status' => array( 'processing', 'completed', 'on-hold' ),
-            'limit'  => 100, // Reasonable limit for dashboard
+            'limit'  => 100,
             'orderby' => 'date',
             'order' => 'DESC',
         ) );
@@ -511,9 +530,13 @@ class WC_Tour_Bookings {
     }
 
     public function admin_bookings_list_page() {
+        if ( ! function_exists( 'wc_get_orders' ) ) {
+            echo '<div class="wrap"><h1>' . __( 'All Bookings', 'wc-tour-bookings' ) . '</h1><p>' . __( 'WooCommerce is not active.', 'wc-tour-bookings' ) . '</p></div>';
+            return;
+        }
         $orders = wc_get_orders( array(
             'status' => array( 'processing', 'completed', 'on-hold' ),
-            'limit'  => 500, // Extended list
+            'limit'  => 500,
             'orderby' => 'date',
             'order' => 'DESC',
         ) );
