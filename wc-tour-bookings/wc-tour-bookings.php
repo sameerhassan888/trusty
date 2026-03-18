@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce Tour Bookings
  * Description: A high-fidelity Bókun-style alternative for managing tour and activity bookings in WooCommerce.
- * Version: 2.4.0
+ * Version: 2.4.1
  * Author: Jules
  * Text Domain: wc-tour-bookings
  */
@@ -77,7 +77,7 @@ class WC_Tour_Bookings {
             }
 
             // Enqueue assets for frontend view of dashboard
-            wp_enqueue_style( 'wc-tour-bookings-admin', plugin_dir_url( __FILE__ ) . 'assets/css/admin-dashboard.css', array(), '2.4.0' );
+            wp_enqueue_style( 'wc-tour-bookings-admin', plugin_dir_url( __FILE__ ) . 'assets/css/admin-dashboard.css', array(), '2.4.1' );
             wp_enqueue_style( 'dashicons' );
 
             // Minimal WP head for style support
@@ -192,13 +192,13 @@ class WC_Tour_Bookings {
         if ( $product && $product->is_type( 'tour' ) ) {
             wp_enqueue_script( 'jquery-ui-datepicker' );
             wp_enqueue_style( 'jquery-ui-style', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
-            wp_enqueue_script( 'wc-tour-bookings-frontend', plugin_dir_url( __FILE__ ) . 'assets/js/frontend.js', array( 'jquery', 'jquery-ui-datepicker' ), '2.4.0', true );
+            wp_enqueue_script( 'wc-tour-bookings-frontend', plugin_dir_url( __FILE__ ) . 'assets/js/frontend.js', array( 'jquery', 'jquery-ui-datepicker' ), '2.4.1', true );
         }
     }
 
     public function enqueue_admin_assets($hook) {
         if (strpos($hook, 'wc-tour-bookings') !== false) {
-            wp_enqueue_style('wc-tour-bookings-admin', plugin_dir_url(__FILE__) . 'assets/css/admin-dashboard.css', array(), '2.4.0');
+            wp_enqueue_style('wc-tour-bookings-admin', plugin_dir_url(__FILE__) . 'assets/css/admin-dashboard.css', array(), '2.4.1');
             echo '<style>#wpadminbar, #adminmenumain, #wpfooter { display: none !important; } #wpcontent { margin-left: 0 !important; padding: 0 !important; } .update-nag, .notice { display: none !important; }</style>';
         }
     }
@@ -694,7 +694,7 @@ class WC_Tour_Bookings {
                                 <div class="bokun-chart-container">
                                     <?php foreach($weekly_trends as $index => $val): ?>
                                         <div class="bokun-bar-group">
-                                            <div class="bokun-bar" style="height: <?php echo min(100, ($val / max(1, array_max_helper_v3($weekly_trends))) * 100); ?>%;"></div>
+                                            <div class="bokun-bar" style="height: <?php echo min(100, ($val / max(1, array_max_helper_v4($weekly_trends))) * 100); ?>%;"></div>
                                             <span class="bokun-bar-label">Week <?php echo $index + 1; ?></span>
                                         </div>
                                     <?php endforeach; ?>
@@ -827,8 +827,8 @@ class WC_Tour_Bookings {
 }
 
 // Global helper for chart
-if (!function_exists('array_max_helper_v3')) {
-    function array_max_helper_v3($arr) {
+if (!function_exists('array_max_helper_v4')) {
+    function array_max_helper_v4($arr) {
         return !empty($arr) ? max($arr) : 0;
     }
 }
