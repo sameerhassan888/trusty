@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: WooCommerce Tour Bookings
- * Description: A powerful alternative to Bokun for managing tour and activity bookings in WooCommerce.
- * Version: 2.1.1
+ * Description: A high-fidelity Bókun-style alternative for managing tour and activity bookings in WooCommerce.
+ * Version: 2.2.0
  * Author: Jules
  * Text Domain: wc-tour-bookings
  */
@@ -21,6 +21,7 @@ class WC_Tour_Bookings {
         add_action( 'woocommerce_product_data_panels', array( $this, 'add_tour_bookings_panel' ) );
         add_action( 'woocommerce_process_product_meta', array( $this, 'save_tour_bookings_data' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'woocommerce_before_add_to_cart_button', array( $this, 'display_booking_selection' ) );
 
         // Cart and Order Integration
@@ -141,7 +142,13 @@ class WC_Tour_Bookings {
         if ( $product && $product->is_type( 'tour' ) ) {
             wp_enqueue_script( 'jquery-ui-datepicker' );
             wp_enqueue_style( 'jquery-ui-style', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
-            wp_enqueue_script( 'wc-tour-bookings-frontend', plugin_dir_url( __FILE__ ) . 'assets/js/frontend.js', array( 'jquery', 'jquery-ui-datepicker' ), '2.1.1', true );
+            wp_enqueue_script( 'wc-tour-bookings-frontend', plugin_dir_url( __FILE__ ) . 'assets/js/frontend.js', array( 'jquery', 'jquery-ui-datepicker' ), '2.2.0', true );
+        }
+    }
+
+    public function enqueue_admin_assets($hook) {
+        if (strpos($hook, 'wc-tour-bookings') !== false) {
+            wp_enqueue_style('wc-tour-bookings-admin', plugin_dir_url(__FILE__) . 'assets/css/admin-dashboard.css', array(), '2.2.0');
         }
     }
 
@@ -418,6 +425,15 @@ class WC_Tour_Bookings {
 
         add_submenu_page(
             'wc-tour-bookings-dashboard',
+            __( 'Experiences', 'wc-tour-bookings' ),
+            __( 'Experiences', 'wc-tour-bookings' ),
+            'manage_woocommerce',
+            'edit.php?post_type=product&product_type=tour',
+            null
+        );
+
+        add_submenu_page(
+            'wc-tour-bookings-dashboard',
             __( 'All Bookings', 'wc-tour-bookings' ),
             __( 'All Bookings', 'wc-tour-bookings' ),
             'manage_woocommerce',
@@ -431,99 +447,153 @@ class WC_Tour_Bookings {
             echo '<div class="wrap"><h1>' . __( 'Tour Bookings Dashboard', 'wc-tour-bookings' ) . '</h1><p>' . __( 'WooCommerce is not active.', 'wc-tour-bookings' ) . '</p></div>';
             return;
         }
+
         $today_date = wp_date('Y-m-d');
         $orders = wc_get_orders( array(
             'status' => array( 'processing', 'completed', 'on-hold' ),
-            'limit'  => 100,
+            'limit'  => 500,
             'orderby' => 'date',
             'order' => 'DESC',
         ) );
 
-        $total_bookings = 0;
-        $total_spots = 0;
-        $today_bookings = 0;
+        $stats = array(
+            'total_bookings' => 0,
+            'total_passengers' => 0,
+            'booking_value' => 0,
+            'today_passengers' => 0
+        );
 
-        $bookings_by_date = array();
+        $upcoming_departures = array();
+        $weekly_trends = array_fill(0, 5, 0); // Last 5 weeks
 
         foreach ( $orders as $order ) {
             foreach ( $order->get_items() as $item ) {
                 $booking_date = $item->get_meta( '_tour_booking_date' );
                 if ( $booking_date ) {
-                    $total_bookings++;
                     $qty = (int) $item->get_quantity();
-                    $total_spots += $qty;
+                    $stats['total_bookings']++;
+                    $stats['total_passengers'] += $qty;
+                    $stats['booking_value'] += (float) $item->get_total();
+
                     if ( $booking_date === $today_date ) {
-                        $today_bookings += $qty;
+                        $stats['today_passengers'] += $qty;
                     }
 
-                    if ( ! isset( $bookings_by_date[$booking_date] ) ) {
-                        $bookings_by_date[$booking_date] = 0;
+                    // Upcoming departures logic (next 7 days)
+                    $diff = (strtotime($booking_date) - strtotime($today_date)) / (60 * 60 * 24);
+                    if ($diff >= 0 && $diff <= 7) {
+                        $slot = $item->get_meta( '_tour_booking_slot' );
+                        $key = $booking_date . ($slot ? ' ' . $slot : '');
+                        if (!isset($upcoming_departures[$key])) {
+                            $upcoming_departures[$key] = array(
+                                'date' => $booking_date,
+                                'slot' => $slot,
+                                'name' => $item->get_name(),
+                                'spots' => 0,
+                                'capacity' => (int) get_post_meta($item->get_product_id(), '_tour_capacity', true)
+                            );
+                        }
+                        $upcoming_departures[$key]['spots'] += $qty;
                     }
-                    $bookings_by_date[$booking_date] += $qty;
+
+                    // Trends logic
+                    $order_week = (int) wp_date('W', strtotime($order->get_date_created()->date('Y-m-d')));
+                    $current_week = (int) wp_date('W');
+                    $week_diff = $current_week - $order_week;
+                    if ($week_diff >= 0 && $week_diff < 5) {
+                        $weekly_trends[4 - $week_diff] += $qty;
+                    }
                 }
             }
         }
-        ksort($bookings_by_date);
+        ksort($upcoming_departures);
         ?>
-        <style>
-            .bokun-dashboard { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; margin-top: 20px; }
-            .bokun-header { background: #fff; padding: 25px; border: 1px solid #ccd0d4; border-radius: 4px; margin-bottom: 25px; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
-            .bokun-stats { display: flex; gap: 20px; margin-bottom: 25px; }
-            .bokun-stat-card { background: #fff; padding: 20px; border-left: 4px solid #2271b1; border-radius: 4px; flex: 1; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
-            .bokun-stat-value { font-size: 28px; font-weight: 700; color: #1d2327; }
-            .bokun-stat-label { font-size: 14px; color: #646970; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .bokun-section { background: #fff; padding: 25px; border: 1px solid #ccd0d4; border-radius: 4px; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
-            .bokun-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            .bokun-table th, .bokun-table td { text-align: left; padding: 15px; border-bottom: 1px solid #f0f0f1; }
-            .bokun-table th { background: #f6f7f7; font-weight: 600; color: #1d2327; }
-            .bokun-table tr:hover { background-color: #f6f7f7; }
-        </style>
         <div class="wrap bokun-dashboard">
-            <div class="bokun-header">
-                <h1><?php _e( 'Tour Bookings Dashboard', 'wc-tour-bookings' ); ?></h1>
-                <p><?php _e( 'Welcome to your Bokun-style management hub. Monitor your tours and participants in real-time.', 'wc-tour-bookings' ); ?></p>
+            <div class="bokun-top-bar">
+                <h1><?php echo sprintf(__( 'Hello, is it me you\'re looking for? (Bókun Style)', 'wc-tour-bookings' )); ?></h1>
+                <div class="pro-badge" style="color: #2271b1; font-weight: 600; text-decoration: underline; cursor: pointer;"><?php _e('PRO subscription', 'wc-tour-bookings'); ?></div>
             </div>
 
-            <div class="bokun-stats">
-                <div class="bokun-stat-card">
-                    <div class="bokun-stat-value"><?php echo $total_bookings; ?></div>
-                    <div class="bokun-stat-label"><?php _e( 'Recent Bookings', 'wc-tour-bookings' ); ?></div>
+            <div class="bokun-stats-grid">
+                <div class="bokun-card">
+                    <div class="bokun-card-header">
+                        <span class="bokun-card-title"><?php _e('Bookings', 'wc-tour-bookings'); ?></span>
+                        <span class="bokun-badge bokun-badge-blue">Last 6 months</span>
+                    </div>
+                    <div class="bokun-card-value"><?php echo $stats['total_bookings']; ?></div>
                 </div>
-                <div class="bokun-stat-card">
-                    <div class="bokun-stat-value"><?php echo $total_spots; ?></div>
-                    <div class="bokun-stat-label"><?php _e( 'Total Spots (Recent)', 'wc-tour-bookings' ); ?></div>
+                <div class="bokun-card">
+                    <div class="bokun-card-header">
+                        <span class="bokun-card-title"><?php _e('Passengers', 'wc-tour-bookings'); ?></span>
+                        <span class="bokun-badge bokun-badge-blue">Last 14 days</span>
+                    </div>
+                    <div class="bokun-card-value"><?php echo $stats['total_passengers']; ?></div>
                 </div>
-                <div class="bokun-stat-card" style="border-left-color: #d63638;">
-                    <div class="bokun-stat-value"><?php echo $today_bookings; ?></div>
-                    <div class="bokun-stat-label"><?php _e( 'Participants Today', 'wc-tour-bookings' ); ?></div>
+                <div class="bokun-card">
+                    <div class="bokun-card-header">
+                        <span class="bokun-card-title"><?php _e('Booking Value', 'wc-tour-bookings'); ?></span>
+                        <span class="bokun-badge bokun-badge-blue">Total</span>
+                    </div>
+                    <div class="bokun-card-value"><?php echo wc_price($stats['booking_value']); ?></div>
                 </div>
             </div>
 
-            <div class="bokun-section">
-                <h2><?php _e( 'Upcoming Availability Overview', 'wc-tour-bookings' ); ?></h2>
-                <table class="bokun-table">
-                    <thead>
-                        <tr>
-                            <th><?php _e( 'Date', 'wc-tour-bookings' ); ?></th>
-                            <th><?php _e( 'Booked Spots', 'wc-tour-bookings' ); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if ( ! empty( $bookings_by_date ) ) : ?>
-                            <?php foreach ( array_slice($bookings_by_date, 0, 10, true) as $date => $spots ) : ?>
-                                <tr>
-                                    <td><strong><?php echo esc_html( $date ); ?></strong></td>
-                                    <td><span class="badge" style="background: #e7f3ff; color: #0073aa; padding: 4px 8px; border-radius: 12px; font-weight: 600;"><?php echo esc_html( $spots ); ?> <?php _e( 'spots', 'wc-tour-bookings' ); ?></span></td>
-                                </tr>
+            <div class="bokun-main-grid">
+                <div class="bokun-left-col">
+                    <div class="bokun-card" style="margin-bottom: 20px;">
+                        <div class="bokun-card-header">
+                            <span class="bokun-card-title"><?php _e('Your bookings', 'wc-tour-bookings'); ?></span>
+                            <span style="font-size: 12px; color: #646970;"><?php echo wp_date('M d') . ' - ' . wp_date('M d', strtotime('+30 days')); ?></span>
+                        </div>
+                        <div class="bokun-chart-container">
+                            <?php foreach($weekly_trends as $index => $val): ?>
+                                <div class="bokun-bar-group">
+                                    <div class="bokun-bar" style="height: <?php echo min(100, ($val / max(1, array_max_helper($weekly_trends))) * 100); ?>%;"></div>
+                                    <span class="bokun-bar-label">Week <?php echo $index + 1; ?></span>
+                                </div>
                             <?php endforeach; ?>
-                        <?php else : ?>
-                            <tr>
-                                <td colspan="2"><?php _e( 'No upcoming bookings detected in recent orders.', 'wc-tour-bookings' ); ?></td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-                <p style="margin-top: 20px;"><a href="<?php echo admin_url('admin.php?page=wc-tour-bookings-list'); ?>" class="button button-primary button-large"><?php _e( 'View Detailed Bookings List', 'wc-tour-bookings' ); ?></a></p>
+                        </div>
+                    </div>
+
+                    <div class="bokun-card">
+                        <div class="bokun-card-header">
+                            <span class="bokun-card-title"><?php _e('Manage your customers', 'wc-tour-bookings'); ?></span>
+                        </div>
+                        <p style="color: #646970; margin: 15px 0;"><?php _e('Keep your travelers up to date using the Tour Bookings features.', 'wc-tour-bookings'); ?></p>
+                        <a href="<?php echo admin_url('admin.php?page=wc-tour-bookings-list'); ?>" class="button button-primary" style="background: #1d2327; border: none; padding: 5px 20px;"><?php _e('Manage customers', 'wc-tour-bookings'); ?></a>
+                    </div>
+                </div>
+
+                <div class="bokun-right-col">
+                    <div class="bokun-card">
+                        <div class="bokun-card-header">
+                            <span class="bokun-card-title"><?php _e('Upcoming departures', 'wc-tour-bookings'); ?></span>
+                        </div>
+                        <div class="bokun-departures-list">
+                            <?php if ( ! empty( $upcoming_departures ) ) : ?>
+                                <?php foreach ( array_slice($upcoming_departures, 0, 5) as $dep ) : ?>
+                                    <div class="bokun-departure-item">
+                                        <div class="bokun-departure-time"><?php echo esc_html($dep['date']); ?> <?php echo esc_html($dep['slot']); ?></div>
+                                        <a href="#" class="bokun-departure-name"><?php echo esc_html($dep['name']); ?></a>
+                                        <div class="bokun-departure-meta">
+                                            <span><?php echo $dep['spots']; ?><?php echo $dep['capacity'] ? '/' . $dep['capacity'] : ''; ?> <i class="dashicons dashicons-admin-users" style="font-size: 14px; width: 14px; height: 14px; line-height: 1;"></i></span>
+                                        </div>
+                                        <?php if ($dep['capacity'] > 0) : ?>
+                                            <div class="bokun-capacity-bar">
+                                                <div class="bokun-capacity-fill" style="width: <?php echo min(100, ($dep['spots'] / $dep['capacity']) * 100); ?>%;"></div>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else : ?>
+                                <p style="color: #646970; font-size: 13px;"><?php _e('No upcoming departures found.', 'wc-tour-bookings'); ?></p>
+                            <?php endif; ?>
+                        </div>
+                        <p style="margin-top: 15px; border-top: 1px solid #f0f0f1; padding-top: 10px;">
+                            <a href="#" style="color: #2271b1; text-decoration: none; font-weight: 600; font-size: 13px;"><?php _e('Booking Calendar', 'wc-tour-bookings'); ?></a>
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
         <?php
@@ -601,6 +671,13 @@ class WC_Tour_Bookings {
             </table>
         </div>
         <?php
+    }
+}
+
+// Global helper for chart
+if (!function_exists('array_max_helper')) {
+    function array_max_helper($arr) {
+        return !empty($arr) ? max($arr) : 0;
     }
 }
 
